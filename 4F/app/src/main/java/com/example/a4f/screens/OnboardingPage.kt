@@ -12,7 +12,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale // <-- 1. IMPORT CÁI NÀY
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -28,15 +28,12 @@ fun OnboardingPage(
     Box(
         modifier = modifier
             .fillMaxSize()
-        // <-- 2. BỎ DÒNG PADDING(HORIZONTAL) Ở ĐÂY
     ) {
-
-        // 1. Cụm Text (Tiêu đề + Mô tả)
         Column(
             modifier = Modifier
                 .align(Alignment.TopStart)
                 .padding(top = 60.dp)
-                .padding(horizontal = 24.dp) // <-- Dời padding vào đây
+                .padding(horizontal = 24.dp)
         ) {
             Text(
                 text = title,
@@ -51,12 +48,11 @@ fun OnboardingPage(
             )
         }
 
-        // 2. Hình ảnh
         Image(
             painter = painterResource(id = imageRes),
             contentDescription = null,
             modifier = Modifier
-                .align(Alignment.BottomCenter) // <-- SỬA TỪ Center THÀNH BottomCenter
+                .align(Alignment.Center)
                 .width(500.dp),
             contentScale = ContentScale.FillWidth
         )

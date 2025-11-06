@@ -11,8 +11,6 @@ import com.example.a4f.screens.OnboardingScreen
 import com.example.a4f.screens.RegisterScreen
 import com.example.a4f.screens.SplashScreen
 import com.example.a4f.screens.ForgotPasswordScreen
-import com.example.a4f.screens.OtpScreen
-import com.example.a4f.screens.ResetPasswordScreen
 
 // Định nghĩa các hằng số cho route
 object AppRoutes {
@@ -63,12 +61,7 @@ fun AppNavigation() {
         composable(AppRoutes.FORGOT_PASSWORD) {
             ForgotPasswordScreen(navController = navController)
         }
-        composable(AppRoutes.OTP_VERIFICATION) {
-            OtpScreen(navController = navController)
-        }
-        composable(AppRoutes.RESET_PASSWORD) {
-            ResetPasswordScreen(navController = navController)
-        }
+
     }
 }
 

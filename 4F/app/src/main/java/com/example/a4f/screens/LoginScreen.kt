@@ -1,5 +1,9 @@
 package com.example.a4f.screens
 
+import android.app.Activity
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -9,11 +13,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Email
+import androidx.compose.material.icons.filled.HelpOutline
 import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Phone // <-- Thêm import này
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -22,11 +24,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -35,189 +36,281 @@ import com.example.a4f.R
 import com.example.a4f.navigation.AppRoutes
 import com.example.a4f.ui.theme.LoginButtonColor
 import com.example.a4f.ui.theme.LoginScreenBackground
+import com.google.android.gms.auth.api.signin.GoogleSignIn
+import com.google.android.gms.auth.api.signin.GoogleSignInOptions
+import com.google.android.gms.common.api.ApiException
+import com.google.android.gms.tasks.Task
+import com.google.firebase.auth.AuthResult
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.GoogleAuthProvider
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 
 @Composable
 fun LoginScreen(navController: NavController) {
 
-    var tenKhachHang by rememberSaveable { mutableStateOf("") }
+    var email by rememberSaveable { mutableStateOf("") }
     var password by rememberSaveable { mutableStateOf("") }
-    var passwordVisible by rememberSaveable { mutableStateOf(false) }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(LoginScreenBackground) // 1. Nền xám nhạt
-            .verticalScroll(rememberScrollState()) // 2. Cho phép cuộn
-            .padding(horizontal = 24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
+    val context = LocalContext.current
+    val activity = context as? Activity // ✅ FIX LỖI cast LocalContext → Activity
 
-        // 3. Ảnh xe bus
-        Image(
-            painter = painterResource(id = R.drawable.img_login_bus),
-            contentDescription = "Login Bus",
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 40.dp, start = 16.dp, end = 16.dp),
-            contentScale = ContentScale.Fit
-        )
+    val auth = FirebaseAuth.getInstance()
+    val coroutineScope = rememberCoroutineScope()
+    var isLoading by remember { mutableStateOf(false) }
 
-        // 4. Text "Xin Chào"
-        Text(
-            text = "Xin Chào, Khả Như!",
-            fontSize = 22.sp,
-            fontWeight = FontWeight.Bold,
-            color = LoginButtonColor,
-            modifier = Modifier.padding(top = 16.dp, bottom = 32.dp)
-        )
+    fun navigateToHome() {
+        navController.navigate(AppRoutes.HOME) {
+            popUpTo(navController.graph.startDestinationId) { inclusive = true }
+        }
+    }
 
-        // 5. Ô nhập "Tên Khách Hàng"
-        Text(
-            text = "Tên Khách Hàng",
-            modifier = Modifier.fillMaxWidth(),
-            textAlign = TextAlign.Start,
-            fontWeight = FontWeight.Bold,
-            color = Color.DarkGray
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        OutlinedTextField(
-            value = tenKhachHang,
-            onValueChange = { tenKhachHang = it },
-            modifier = Modifier.fillMaxWidth(),
-            placeholder = { Text("Họ và tên") },
-            leadingIcon = { Icon(Icons.Default.Person, contentDescription = null) },
-            singleLine = true,
-            colors = TextFieldDefaults.colors(
-                focusedContainerColor = Color.White,
-                unfocusedContainerColor = Color.White,
-                disabledContainerColor = Color.White,
-                focusedIndicatorColor = Color.Transparent,
-                unfocusedIndicatorColor = Color.Transparent,
-            ),
-            shape = RoundedCornerShape(16.dp)
-        )
+    // --- Cấu hình Google Sign In ---
+    val googleSignInClient = remember {
+        val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+            .requestIdToken(context.getString(R.string.default_web_client_id))
+            .requestEmail()
+            .build()
+        GoogleSignIn.getClient(context, gso)
+    }
 
-        Spacer(modifier = Modifier.height(16.dp))
+    // --- Xử lý kết quả đăng nhập Google ---
+    val googleSignInLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
+            try {
+                val account = task.getResult(ApiException::class.java)!!
+                val idToken = account.idToken!!
+                val credential = GoogleAuthProvider.getCredential(idToken, null)
 
-        // 6. Ô nhập "Password"
-        Text(
-            text = "Password",
-            modifier = Modifier.fillMaxWidth(),
-            textAlign = TextAlign.Start,
-            fontWeight = FontWeight.Bold,
-            color = Color.DarkGray
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        OutlinedTextField(
-            value = password,
-            onValueChange = { password = it },
-            modifier = Modifier.fillMaxWidth(),
-            placeholder = { Text("•••••••••") },
-            leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null) },
-            singleLine = true,
-            visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-            trailingIcon = {
-                val image = if (passwordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff
-                IconButton(onClick = { passwordVisible = !passwordVisible }) {
-                    Icon(imageVector = image, contentDescription = "Toggle password visibility")
+                coroutineScope.launch {
+                    try {
+                        isLoading = true
+                        auth.signInWithCredential(credential).await()
+                        Toast.makeText(context, "Đăng nhập Google thành công", Toast.LENGTH_SHORT).show()
+                        navigateToHome()
+                    } catch (e: Exception) {
+                        Toast.makeText(context, "Lỗi: ${e.message}", Toast.LENGTH_SHORT).show()
+                    } finally {
+                        isLoading = false
+                    }
                 }
-            },
-            colors = TextFieldDefaults.colors(
-                focusedContainerColor = Color.White,
-                unfocusedContainerColor = Color.White,
-                disabledContainerColor = Color.White,
-                focusedIndicatorColor = Color.Transparent,
-                unfocusedIndicatorColor = Color.Transparent,
-            ),
-            shape = RoundedCornerShape(16.dp)
-        )
-
-        // 7. Nút "Quên mật khẩu"
-        TextButton(
-            onClick = {
-                // SỬA DÒNG NÀY:
-                navController.navigate(AppRoutes.FORGOT_PASSWORD)
-            },
-            modifier = Modifier.align(Alignment.End)
-        ) {
-            Text(text = "Quên mật khẩu?", color = Color.Gray)
+            } catch (e: ApiException) {
+                isLoading = false
+                Toast.makeText(context, "Đăng nhập Google thất bại: ${e.message}", Toast.LENGTH_SHORT).show()
+            }
+        } else {
+            isLoading = false
         }
+    }
 
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // 8. Nút "Đăng nhập"
-        Button(
-            onClick = {
-                navController.navigate(AppRoutes.HOME) {
-                    popUpTo(navController.graph.startDestinationId) { inclusive = true }
-                }
-            },
+    // --- Giao diện ---
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .height(50.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = LoginButtonColor),
-            shape = RoundedCornerShape(16.dp)
+                .fillMaxSize()
+                .background(LoginScreenBackground)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text(text = "Đăng nhập", fontSize = 18.sp, color = Color.White)
-        }
-
-        Spacer(modifier = Modifier.height(32.dp))
-
-        // 9. Đăng nhập Social
-        Text(text = "Or continue with", color = Color.Gray)
-        Spacer(modifier = Modifier.height(16.dp))
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.Center,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Nút Google
-            IconButton(
-                onClick = { /* TODO: Xử lý login Google */ },
+            Image(
+                painter = painterResource(id = R.drawable.img_login_bus),
+                contentDescription = "Login Bus",
                 modifier = Modifier
-                    .size(50.dp)
-                    .clip(CircleShape)
-                    .background(Color.White)
+                    .fillMaxWidth()
+                    .padding(top = 40.dp, start = 16.dp, end = 16.dp),
+                contentScale = ContentScale.Fit
+            )
+
+            Text(
+                text = "Xin Chào, Quý Khách!",
+                fontSize = 22.sp,
+                fontWeight = FontWeight.Bold,
+                color = LoginButtonColor,
+                modifier = Modifier.padding(top = 16.dp, bottom = 32.dp)
+            )
+
+            // Email input
+            Text(
+                text = "Email",
+                modifier = Modifier.fillMaxWidth(),
+                textAlign = TextAlign.Start,
+                fontWeight = FontWeight.Bold,
+                color = Color.DarkGray
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            OutlinedTextField(
+                value = email,
+                onValueChange = { email = it },
+                modifier = Modifier.fillMaxWidth(),
+                placeholder = { Text("yourname@gmail.com") },
+                leadingIcon = { Icon(Icons.Default.Email, contentDescription = null) },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                colors = TextFieldDefaults.colors(
+                    focusedContainerColor = Color.White,
+                    unfocusedContainerColor = Color.White,
+                    disabledContainerColor = Color.White,
+                    focusedIndicatorColor = Color.Transparent,
+                    unfocusedIndicatorColor = Color.Transparent,
+                ),
+                shape = RoundedCornerShape(16.dp)
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Password input
+            Text(
+                text = "Password",
+                modifier = Modifier.fillMaxWidth(),
+                textAlign = TextAlign.Start,
+                fontWeight = FontWeight.Bold,
+                color = Color.DarkGray
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            OutlinedTextField(
+                value = password,
+                onValueChange = { password = it },
+                modifier = Modifier.fillMaxWidth(),
+                placeholder = { Text("•••••••••") },
+                leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null) },
+                singleLine = true,
+                colors = TextFieldDefaults.colors(
+                    focusedContainerColor = Color.White,
+                    unfocusedContainerColor = Color.White,
+                    disabledContainerColor = Color.White,
+                    focusedIndicatorColor = Color.Transparent,
+                    unfocusedIndicatorColor = Color.Transparent,
+                ),
+                shape = RoundedCornerShape(16.dp)
+            )
+
+            TextButton(
+                onClick = { navController.navigate(AppRoutes.FORGOT_PASSWORD) },
+                modifier = Modifier.align(Alignment.End)
             ) {
-                Image(
-                    painter = painterResource(id = R.drawable.ic_google_logo),
-                    contentDescription = "Google Login",
-                    modifier = Modifier.size(60.dp)
-                )
+                Text(text = "Quên mật khẩu?", color = Color.Gray)
             }
 
-            Spacer(modifier = Modifier.width(32.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
-            // Nút Điện thoại
-            IconButton(
-                onClick = { /* TODO: Xử lý login bằng SĐT */ },
+            // Nút đăng nhập Email/Password
+            Button(
+                onClick = {
+                    if (email.isBlank() || password.isBlank()) {
+                        Toast.makeText(context, "Vui lòng nhập email và mật khẩu", Toast.LENGTH_SHORT).show()
+                    } else {
+                        isLoading = true
+                        auth.signInWithEmailAndPassword(email, password)
+                            .addOnCompleteListener { task: Task<AuthResult> ->
+                                isLoading = false
+                                if (task.isSuccessful) {
+                                    Toast.makeText(context, "Đăng nhập thành công", Toast.LENGTH_SHORT).show()
+                                    navigateToHome()
+                                } else {
+                                    Toast.makeText(context, "Lỗi: ${task.exception?.message}", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                    }
+                },
                 modifier = Modifier
-                    .size(50.dp)
-                    .clip(CircleShape)
-                    .background(Color.White)
+                    .fillMaxWidth()
+                    .height(50.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = LoginButtonColor),
+                shape = RoundedCornerShape(16.dp)
             ) {
-                Icon(
-                    imageVector = Icons.Default.Phone,
-                    contentDescription = "Đăng nhập SĐT",
-                    modifier = Modifier.size(32.dp),
-                    tint = Color.DarkGray
-                )
+                Text(text = "Đăng nhập", fontSize = 18.sp, color = Color.White)
             }
+
+            Spacer(modifier = Modifier.height(32.dp))
+
+            // Social login
+            Text(text = "Or continue with", color = Color.Gray)
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // --- Nút Google ---
+                IconButton(
+                    onClick = {
+                        val act = activity
+                        if (act != null) {
+                            isLoading = true
+                            googleSignInLauncher.launch(googleSignInClient.signInIntent)
+                        } else {
+                            Toast.makeText(context, "Không thể khởi tạo Google Sign In", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    modifier = Modifier
+                        .size(60.dp)
+                        .clip(CircleShape)
+                        .background(Color.White)
+                ) {
+                    Image(
+                        painter = painterResource(id = R.drawable.ic_google_logo),
+                        contentDescription = "Google Login",
+                        modifier = Modifier.size(32.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(32.dp))
+
+                // --- Nút Ẩn danh ---
+                IconButton(
+                    onClick = {
+                        isLoading = true
+                        auth.signInAnonymously()
+                            .addOnCompleteListener { task: Task<AuthResult> ->
+                                isLoading = false
+                                if (task.isSuccessful) {
+                                    Toast.makeText(context, "Đăng nhập với tư cách Khách", Toast.LENGTH_SHORT).show()
+                                    navigateToHome()
+                                } else {
+                                    Toast.makeText(context, "Lỗi: ${task.exception?.message}", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                    },
+                    modifier = Modifier
+                        .size(60.dp)
+                        .clip(CircleShape)
+                        .background(Color.White)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.HelpOutline,
+                        contentDescription = "Đăng nhập Ẩn danh",
+                        modifier = Modifier.size(32.dp),
+                        tint = Color.DarkGray
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(32.dp))
+
+            // --- Nút Đăng ký ---
+            TextButton(
+                onClick = { navController.navigate(AppRoutes.REGISTER) }
+            ) {
+                Text(text = "Bạn chưa có tài khoản !!", color = LoginButtonColor)
+            }
+
+            Spacer(modifier = Modifier.height(32.dp))
         }
 
-        Spacer(modifier = Modifier.height(32.dp))
-
-        // 10. Nút "Đăng ký"
-        TextButton(
-            onClick = {
-                navController.navigate(AppRoutes.REGISTER)
+        if (isLoading) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.5f)),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator(color = Color.White)
             }
-        ) {
-            Text(text = "Bạn chưa có tài khoản !!", color = LoginButtonColor)
         }
-
-        Spacer(modifier = Modifier.height(32.dp))
     }
 }
